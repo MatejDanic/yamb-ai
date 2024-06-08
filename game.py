@@ -1,107 +1,138 @@
 import random
+import numpy as np
 from util import dice_combination_score_map
+from constants import DICE_ART, BOX_WIDTH, COLUMN_TYPES, ROW_HEADER_WIDTH, BORDERS, BOX_TYPES
 
-def initialize_game(full=False):
-    return {
-            "roll_count": 0,
-            "dices": [1, 2, 3, 4, 5],
-            "sheet": [[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-                    [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
-                    [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
-                    [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]],
-            "announcement": -1,
-        } if full else {
-            "roll_count": 0,
-            "dices": [1, 2, 3, 4, 5],
-            "sheet": [[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]],
-            "announcement": -1,
-        }
+class Game:
+    def __init__(self, n_columns=4):
+        self.roll_count = 0
+        self.announcement = -1
+        self.dices = [1, 2, 3, 4, 5]
+        self.sheet = [[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1] for _ in range(n_columns)]
+        self.roll_dice(31)        
 
-def is_box_availale(game, column, box):
-    if game["sheet"][column][box] != -1:
-        return False
-    elif column == 0 and len(game["sheet"]) > 1:
-        return box == 0 or game["sheet"][column][box - 1] != -1
-    elif column == 1:
-        return box == 12 or game["sheet"][column][box + 1] != -1
-    elif column == 3:
-        return box == game["announcement"]
-    return column == 2 or column == 0 and len(game["sheet"]) == 1
-
-def roll_dice(game, dice_to_roll):
-    game["dices"] = tuple(sorted(random.randint(1, 6) if dice_to_roll & (1 << i) else game["dices"][i] for i in range(5)))
-    game["roll_count"] += 1
+    def roll_dice(self, dice_to_roll):
+        binary_str = f"{dice_to_roll:05b}"
+        self.dices = tuple(sorted([random.randint(1, 6) if binary_str[i] == '1' else self.dices[i] for i in range(5)]))
+        self.roll_count += 1
     
-def validate_roll_dice(game):
-    return game["roll_count"] < 3 and not is_announcement_required(game)
+    def validate_roll_dice(self):
+        return self.roll_count < 3 and not self.is_announcement_required()
 
-def fill_box(game, column, box):
-    game["sheet"][column][box] = dice_combination_score_map[(game["dices"], box)]
-    game["roll_count"] = 0
-    game["announcement"] = -1
+    def fill_box(self, column, box):
+        self.sheet[column][box] = dice_combination_score_map[(self.dices, box)]
+        self.roll_count = 0
+        self.announcement = -1
+        self.roll_dice(31)
+        
+    def validate_fill_box(self, column, box):
+        return self.roll_count > 0 and self.is_box_available(column, box)
+
+    def announce(self, box):
+        self.announcement = box
+
+    def validate_announcement(self, box):
+        return self.announcement == -1 and self.roll_count == 1 and len(self.sheet) == 4 and self.sheet[3][box] == -1
+
+    def is_box_available(self, column, box):
+        if self.sheet[column][box] != -1:
+            return len(self.sheet) == 4
+        elif column == 0:
+            return box == 0 or self.sheet[column][box - 1] != -1
+        elif column == 1:
+            return box == 12 or self.sheet[column][box + 1] != -1
+        elif column == 3:
+            return box == self.announcement
+        return column == 2
+
+    def is_completed(self):
+        return self.roll_count == 3 if len(self.sheet) == 0 else all(all(box != -1 for box in column) for column in self.sheet)
+        
+    def is_announcement_required(self):
+        return self.roll_count == 1 and self.announcement == -1 and self.are_all_non_anouncement_columns_completed()       
+
+    def are_all_non_anouncement_columns_completed(self):
+        return len(self.sheet) == 4 and all(all(box != -1 for box in column) for column in self.sheet[:-1]) 
+
+    def get_total_sum(self):
+        return self.get_top_sum() + self.get_middle_difference() + self.get_bottom_sum()
+
+    def get_top_sum(self):
+        return sum(self.get_top_sum_column(column) for column in self.sheet)
+
+    def get_top_sum_column(self, column):
+        top_sum = sum(box if box != -1 else 0 for box in column[:6])
+        return top_sum + 30 if top_sum >= 60 else top_sum
+        
+    def get_middle_difference(self):
+        return sum(self.get_middle_difference_column(column) for column in self.sheet)
+
+    def get_middle_difference_column(self, column):
+        return (column[6] - column[7]) * column[0] if column[6] != -1 and column[7] != -1 and column[0] != -1 else 0
+
+    def get_bottom_sum(self):
+        return sum(self.get_bottom_sum_column(column) for column in self.sheet)
+
+    def get_bottom_sum_column(self, column):
+        return sum(box if box != -1 else 0 for box in column[8:])
+
+    def get_potential_scores(self):
+        potential_scores = []
+        for column in range(len(self.sheet)):
+            for box in range(len(column)):
+                if self.is_box_available(column, box) or (column == 3 and self.is_announcement_required() and self.sheet[column][box] == -1):
+                    if box == 7:  # Min
+                        potential_scores.append(30-dice_combination_score_map[(self.dices, box)])
+                    else:
+                        potential_scores.append(dice_combination_score_map[(self.dices, box)])
+        return potential_scores
     
-def validate_fill_box(game, column, box):
-    return game["roll_count"] > 0 and is_box_available(game, column, box)
+    def __repr__(self):
+        lines = ['  '.join(DICE_ART[dice][line] for dice in self.dices) for line in range(5)]
+        if len(self.sheet) == 0:
+            return "\n".join(lines)
 
-def announce(game, box):
-    game["announcement"] = box
+        column_headers = " ".join(f"{label:^{BOX_WIDTH}}" for label in COLUMN_TYPES)
+        header_row = f"{'':^{ROW_HEADER_WIDTH + 3}}{column_headers}"
+        lines.extend([header_row, BORDERS["border_top"]])
 
-def validate_announcement(game, box):
-    return game["announcement"] == -1 and game["roll_count"] == 1 and len(game["sheet"]) == 4 and game["sheet"][3][box] == -1
+        top_sum = [self.get_top_sum_column(col) for col in self.sheet]
+        middle_difference = [self.get_middle_difference_column(col) for col in self.sheet]
+        bottom_sum = [self.get_bottom_sum_column(col) for col in self.sheet]
 
-def is_box_available(game, column, box):
-    if game["sheet"][column][box] != -1:
-        return False
-    elif column == 0:
-        return box == 0 or game["sheet"][column][box - 1] != -1
-    elif column == 1:
-        return box == 12 or game["sheet"][column][box + 1] != -1
-    elif column == 3:
-        return box == game["announcement"]
-    return column == 2
+        column_totals = [top + mid + bottom for top, mid, bottom in zip(top_sum, middle_difference, bottom_sum)]
+        grand_total = sum(column_totals)
 
-def is_completed(game):
-    return all(all(box != -1 for box in column) for column in game["sheet"])
-    
-def is_announcement_required(game):
-    return game["roll_count"] == 1 and game["announcement"] == -1 and are_all_non_anouncement_columns_completed(game)       
+        for row_idx, label in enumerate(BOX_TYPES):
+            if row_idx == 6:
+                lines.append(format_total_row('Σ(1-6)', top_sum))
+                lines.append(BORDERS["long_border_bottom"])
+            elif row_idx == 8:
+                lines.append(format_total_row('Δ', middle_difference))
+                lines.append(BORDERS["long_border_bottom"])
+            
+            row = "│".join(f"{self.sheet[column][row_idx] if self.sheet[column][row_idx] != -1 else ' ':^{BOX_WIDTH}}" for column in range(len(self.sheet)))
+            row = f"  {label:<{ROW_HEADER_WIDTH}} │{row}│"
+            lines.append(row)
+            
+            if row_idx in [5, 7, 12]:
+                lines.append(BORDERS["long_border_top"])
+            else:
+                lines.append(BORDERS["border"])
 
-def are_all_non_anouncement_columns_completed(game):
-    return all(all(box != -1 for box in column) for column in game["sheet"][:-1]) 
+        lines.append(format_total_row('Σ', bottom_sum))
+        lines.append(BORDERS["long_border_bottom_final"])
 
-def get_total_sum(game):
-    return get_top_sum(game) + get_middle_difference(game) + get_bottom_sum(game)
+        grand_total_row = f"{'':^{(ROW_HEADER_WIDTH + 3) + (BOX_WIDTH + 1) * 3}}│{grand_total:^{BOX_WIDTH * 2 + 1}}│"
+        lines.append(grand_total_row)
+        lines.append(BORDERS["border_bottom_final"])
 
-def get_top_sum(game):
-    return sum(get_top_sum_column(column) for column in game["sheet"])
+        return "\n".join(lines)
 
-def get_top_sum_column(column):
-    top_sum = sum(column[:6])
-    return top_sum + 30 if top_sum >= 60 else top_sum
-    
-def get_middle_difference(game):
-    return sum(get_middle_difference_column(column) for column in game["sheet"])
-
-def get_middle_difference_column(column):
-    return (column[6] - column[7]) * column[0] if column[6] != -1 and column[7] != -1 and column[0] != -1 else 0
-
-def get_bottom_sum(game):
-    return sum(get_bottom_sum_column(column) for column in game["sheet"])
-
-def get_bottom_sum_column(column):
-    return sum(column[8:])
-
-def get_potential_scores(game):
-    potential_scores = []
-    for column in range(len(game["sheet"])):
-        for box in range(len(column)):
-            if is_box_available(game, column, box) or (column == 3 and is_announcement_required(game) and game["sheet"][column][box] == -1):
-                if box == 7:  # Min
-                    potential_scores.append(30-dice_combination_score_map[(game["dices"], box)])
-                else:
-                    potential_scores.append(dice_combination_score_map[(game["dices"], box)])
-    return potential_scores
+def format_total_row(label, values):
+    total_sum = sum(values)
+    return f"│{label:^{ROW_HEADER_WIDTH + 2}}│" + "│".join(f"{value:^{BOX_WIDTH}}" for value in values) + f"│{total_sum:^{BOX_WIDTH}}│"
 
 if __name__ == "__main__":
-    game = initialize_game()
+    game = Game()
     print(game)

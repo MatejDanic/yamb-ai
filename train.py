@@ -1,83 +1,80 @@
-import time, datetime
 import tensorflow as tf
 import numpy as np
+import datetime
+import time
 from agent import QLearningAgent
-from game import roll_dice, fill_box, announce, is_completed, get_total_sum
-from display import render_game, render_stats
 
-num_episodes = 1000000
-
-log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-summary_writer = tf.summary.create_file_writer(log_dir)
-print(f"TensorBoard logs will be written to {log_dir}")
-
+num_episodes = 100000
+variant = "simple"
+agent = QLearningAgent(variant)
 highest_score = 0
-batch_size = 100
+batch_size = round(num_episodes / 100)
 total_scores = []
 episode_times = []
 reward_log = []
 exploration_rate_log = []
 
-agent = QLearningAgent(32 + 13)  # Rolling dice, announcing, filling boxes
-#agent = QLearningAgent(32 + 13 + 52)  # Rolling dice, announcing, filling boxes
+log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+summary_writer = tf.summary.create_file_writer(log_dir)
+print(f"TensorBoard logs will be written to {log_dir}")
 
-state = agent.get_state()
-
-print("Training agent...")
-for episode in range(num_episodes):
+for episode in range(num_episodes+1):
     start_time = time.time()
     total_reward = 0
-    while not is_completed(agent.game):
-        valid_actions = agent.get_valid_actions(agent.game)
-        if not valid_actions:
-            print(agent.game)
-            print("No valid actions available, exiting....")
-            exit()
-        action = agent.choose_action(state, valid_actions)
+    state = agent.get_state()
+    
+    while not agent.game.is_completed():
+        action = agent.choose_action()
         if action < 32: 
-            roll_dice(agent.game, action)
+            agent.game.roll_dice(action)
         elif action < 84:
             action -= 32
-            fill_box(agent.game, action // 13, action % 13)
+            agent.game.fill_box(action // 13, action % 13)
         else:
-            announce(agent.game,  action - 84)
+            agent.game.announce(agent.game,  action - 84)
         
-        if agent.game["roll_count"] > 0:
-            next_state = agent.get_state()
-            reward = agent.calculate_reward(agent.game, action)
-            agent.learn(state, action, reward, next_state, is_completed(agent.game))
-            state = next_state
-            total_reward += reward
+        next_state = agent.get_state()
+        reward = agent.calculate_reward(action)
+        agent.learn(state, action, reward, next_state, agent.game.is_completed())
+        state = next_state
+        
+        total_reward += reward
+
     agent.update_exploration_rate()
     end_time = time.time()
     episode_time = end_time - start_time
     episode_times.append(episode_time)
-    avg_episode_time = np.mean(episode_times)
 
-    # Track highest score and average total score
-    current_score = get_total_sum(agent.game)
+    current_score = agent.calculate_reward(0) if len(agent.game.sheet) == 0 else agent.game.get_total_sum()
+    
     highest_score = max(highest_score, current_score)
+    if highest_score == current_score:
+        print(agent.game)
     total_scores.append(current_score)
-    avg_total_score = np.mean(total_scores)
 
-    # Log metrics to TensorBoard
     reward_log.append(total_reward)
     exploration_rate_log.append(agent.exploration_rate)
 
-    # with summary_writer.as_default():
-    with summary_writer.as_default():
-        tf.summary.scalar('Average Total Score', avg_total_score, step=episode)
-        tf.summary.scalar('Exploration Rate', agent.exploration_rate, step=episode)
+    if episode % batch_size == 0 or episode == num_episodes - 1:
+        avg_total_score = np.mean(total_scores[-batch_size:])
+        avg_episode_time = np.mean(episode_times[-batch_size:])
+        with summary_writer.as_default():
+            tf.summary.scalar('Average Total Score', avg_total_score, step=episode)
+            tf.summary.scalar('Exploration Rate', agent.exploration_rate, step=episode)
+        length = 50
+        filled_length = int(length * episode // num_episodes)
+        percent = ("{0:.1f}").format(100 * (episode / float(num_episodes)))
+        bar = '█' * filled_length + '-' * (length - filled_length)
+        remaining_episodes = num_episodes - episode
+        estimated_time_left = remaining_episodes * max(0.001666, avg_episode_time)
+        eta = time.strftime("%H:%M:%S", time.gmtime(estimated_time_left))
+        print(f'\rProgress: |{bar}| {percent}% Complete ({episode}/{num_episodes}) | Highest Score: {highest_score} | Average Score: {avg_total_score:.3f} | ETA: {eta}', end='\r')
+        if episode == num_episodes:
+            print()  # New line at the end of the progress
+    agent.initialize_game()
 
-    # Print loading bar with statistics
-    if episode % batch_size == 0:
-        render_stats(episode + 1, num_episodes, highest_score, avg_episode_time)
-    agent.reset()
+# load previously saved q table by name and avg total score as wildcard and replace it with current if avg_total_score is larger
 
-
-print(f"\nTraining completed.")
-
-# Save the trained Q-table
 print("Saving Q-table...")
-agent.save_q_table('q_table.json')
+agent.save_q_table(f"{variant}_{avg_total_score:.3f}_{agent.learning_rate}_{agent.discount_factor}_{agent.exploration_decay}_{agent.exploration_min}.json")
 print("Q-table saved successfully.")

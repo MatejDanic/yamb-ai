@@ -1,33 +1,29 @@
-import json
-from game import initialize_game, roll_dice, fill_box, announce, is_completed, get_total_sum
 from agent import QLearningAgent
-from display import render_game
 
-# Load the trained Q-table
-agent = QLearningAgent(32 + 13)  # rolling dice, announcing, filling boxes
+variant = "dice_only"
+file_name = "dice_only_2.886_0.3_0.99_0.99999_0.01.json"
+agent = QLearningAgent(variant)  # rolling dice, announcing, filling boxes
 print("Loading Q-table...")
-agent.load_q_table('q_table.json')
+agent.load_q_table(f"{file_name}")
 print("Q-table loaded successfully.")
 
-# Set exploration rate to 0 to ensure the agent always exploits the learned policy
 agent.exploration_rate = 0.0
 
-# Initialize the game
 state = agent.get_state()
 
-while not is_completed(agent.game):
-    valid_actions = agent.get_valid_actions(agent.game)
-    action = agent.choose_action(state, valid_actions)
-    if action < 32:
-            roll_dice(agent.game, action)
+action = 31
+reward = agent.calculate_reward(action)
+print(agent.game)
+
+while not agent.game.is_completed():
+    action = agent.choose_action()
+    if action < 32: 
+        agent.game.roll_dice(action)
     elif action < 84:
         action -= 32
-        fill_box(agent.game, action // 13, action % 13)
+        agent.game.fill_box(action // 13, action % 13)
     else:
-        announce(agent.game,  action - 84)
+        agent.game.announce(agent.game,  action - 84)
+    print(f"Action: {action:b}, Reward: {reward}")
+    print(agent.game)
 
-    next_state = agent.get_state()
-    state = next_state
-
-# Display the final state of the game
-render_game(agent.game)
