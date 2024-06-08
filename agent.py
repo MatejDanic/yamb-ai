@@ -1,83 +1,108 @@
 import numpy as np
-import json
+import pickle
 from collections import defaultdict
+from game import initialize_game, validate_roll_dice, validate_fill_box, validate_announcement, is_box_available, get_potential_scores
+from util import dice_combination_score_map
 
 class QLearningAgent:
-    def __init__(self, state_size, action_size, learning_rate=0.1, discount_factor=0.99, exploration_rate=1.0, exploration_decay=0.995, exploration_min=0.01):
-        self.state_size = state_size
+    def __init__(self, action_size, learning_rate=0.005, discount_factor=0.98, exploration_rate=1.0, exploration_decay=0.99998, exploration_min=0.05):
         self.action_size = action_size
         self.learning_rate = learning_rate
         self.discount_factor = discount_factor
         self.exploration_rate = exploration_rate
-        self.exploration_decay = exploration_decay     
         self.exploration_min = exploration_min
+        self.exploration_decay = exploration_decay
         self.q_table = defaultdict(lambda: np.zeros(action_size))
+        self.game = initialize_game()
+
+    def reset(self):
+        self.game = initialize_game()
+
+    def get_state(self):
+        return tuple([self.game["roll_count"]] + list(self.game["dices"]) + [1 if box != -1 else 0 for column in self.game["sheet"] for box in column ] + ([self.game["announcement"]] if len(self.game["sheet"]) > 1 else []))
     
-    def get_state(self, game):
-        simplified_state = game.to_simplified()
-        dice_values = tuple(simplified_state['dices'].values())
-        sheet_values = tuple(tuple(box for box in column.values()) for column in simplified_state['sheet'].values())
-        roll_count = simplified_state['roll_count']
-        announcement = simplified_state['announcement']
-        return (dice_values, sheet_values, roll_count, announcement)
+    def learn(self, state, action, reward, next_state, done=0):        
+        best_next_action = np.argmax(self.q_table[next_state])
+        td_target = reward + self.discount_factor * self.q_table[next_state][best_next_action] * (1 - done)
+        td_error = td_target - self.q_table[state][action]
+        self.q_table[state][action] += self.learning_rate * td_error  
     
+    def calculate_reward(self, game, action):
+        if action < 32:
+            # Count occurrences of each dice value
+            dice_counts = np.bincount(game["dices"], minlength=7)[1:]
+            # Favor rolling multiple dice of the same value
+            same_value_bonus = np.max(dice_counts)
+            
+            # Check for consecutive sequences for straights
+            consecutive_bonus = 0
+            if 1 in dice_counts and 2 in dice_counts and 3 in dice_counts and 4 in dice_counts:
+                consecutive_bonus = 1
+            if 2 in dice_counts and 3 in dice_counts and 4 in dice_counts and 5 in dice_counts:
+                consecutive_bonus = 1
+            if 3 in dice_counts and 4 in dice_counts and 5 in dice_counts and 6 in dice_counts:
+                consecutive_bonus = 1
+            if 1 in dice_counts and 2 in dice_counts and 3 in dice_counts and 4 in dice_counts and 5 in dice_counts:
+                consecutive_bonus = 2
+            if 2 in dice_counts and 3 in dice_counts and 4 in dice_counts and 5 in dice_counts and 6 in dice_counts:
+                consecutive_bonus = 2
+            
+            return (same_value_bonus + consecutive_bonus) * 10
+        elif action < 84: 
+            box = (action - 32) % 13
+            score = dice_combination_score_map[game["dices"], box]
+            if box == 7:
+                score = 30 - score
+            elif score == 0:
+                score -= 20
+            return score
+        else:
+            # Potential score from the announced box based on current dice values
+            potential_score = dice_combination_score_map[game["dices"], (action-84)]
+            return potential_score
+
+
     def choose_action(self, state, valid_actions):
-        if np.random.rand() <= self.exploration_rate:
+        if np.random.rand() < self.exploration_rate:
             return np.random.choice(valid_actions)
-        state_key = str(state)
-        if state_key not in self.q_table:
-            self.q_table[state_key] = np.zeros(self.action_size)
-        q_values = self.q_table[state_key]
-        return valid_actions[np.argmax([q_values[a] for a in valid_actions])]
-    
-    def learn(self, state, action, reward, next_state):
-        state_key = str(state)
-        next_state_key = str(next_state)
-        if state_key not in self.q_table:
-            self.q_table[state_key] = np.zeros(self.action_size)
-        if next_state_key not in self.q_table:
-            self.q_table[next_state_key] = np.zeros(self.action_size)
-        q_update = reward + self.discount_factor * np.max(self.q_table[next_state_key])
-        self.q_table[state_key][action] = (1 - self.learning_rate) * self.q_table[state_key][action] + self.learning_rate * q_update
+        else:
+            return valid_actions[np.argmax(self.q_table[state][action] for action in valid_actions)]
+        
+    def get_valid_actions(self, game):
+        if game["roll_count"] == 0:
+            return [31]
+        valid_actions = []
+        for action in range(self.action_size):
+            if action == 0:
+                continue
+            if action < 32:
+                if validate_roll_dice(game):
+                    valid_actions.append(action)
+            elif action < 84:
+                column = (action - 32) // 13
+                box = (action - 32) % 13
+                if validate_fill_box(game, column, box):
+                    valid_actions.append(action)
+            else:
+                box = action - 84
+                if validate_announcement(game, box):
+                    valid_actions.append(action)
+        return valid_actions
     
     def update_exploration_rate(self):
         if self.exploration_rate > self.exploration_min:
             self.exploration_rate *= self.exploration_decay
 
-    def get_valid_actions(self, game):
-        if game.roll_count == 0:
-            return [31]
-        valid_actions = []
-        for action in range(self.action_size):
-            action_type, action_details = self.map_action_to_game(action)
-            if action_type == 'roll_dice' and game.validate_roll_dice():
-                valid_actions.append(action)
-            elif action_type == 'fill_box' and game.validate_fill_box(*action_details):
-                valid_actions.append(action)
-            elif action_type == 'announce' and game.validate_announce(action_details):
-                valid_actions.append(action)
-        return valid_actions
-    
     def save_q_table(self, filename):
-        serializable_q_table = {k: v.tolist() for k, v in self.q_table.items()}
-        with open(filename, 'w') as f:
-            json.dump(serializable_q_table, f)
+        with open(filename, 'wb') as file:
+            pickle.dump(dict(self.q_table), file)
 
     def load_q_table(self, filename):
-        with open(filename, 'r') as f:
-            serializable_q_table = json.load(f)
-        self.q_table = {k: np.array(v) for k, v in serializable_q_table.items()}
+        with open(filename, 'rb') as file:
+            self.q_table = defaultdict(lambda: np.zeros(self.action_size), pickle.load(file))
 
-    def map_action_to_game(self, action):
-        if action < 32:  # Rolling dice
-            dice_to_roll = [i for i in range(5) if action & (1 << i)]
-            return 'roll_dice', dice_to_roll
-        elif action < 84:  # Filling box
-            action -= 32
-            column = action // 13
-            box = action % 13
-            return 'fill_box', (column, box)
-        else:  # Announcements
-            action -= 84
-            announcement = action
-            return 'announce', announcement
+if __name__ == "__main__":
+    agent = QLearningAgent(32 + 13 + 52)
+    game = initialize_game()
+    print(game)
+    print(agent.get_state())
