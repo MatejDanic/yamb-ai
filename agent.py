@@ -1,7 +1,7 @@
 import numpy as np
 import pickle
 from collections import defaultdict
-from game import Game
+from simple_yamb import Game
 from util import dice_combination_score_map
 
 class QLearningAgent:
@@ -14,12 +14,6 @@ class QLearningAgent:
         self.exploration_decay = exploration_decay
         self.q_table = defaultdict(lambda: np.zeros(self.action_size))
         self.initialize_game()
-
-    def initialize_game(self):
-        n_columns = 0 if self.variant == "dice_only" else (1 if self.variant == "simple" else 4)
-        self.game = Game(n_columns)
-        self.action_size = 32 + 13 * n_columns + (13 if n_columns == 4 else 0)
-        self.state_size = 1 + 5 + 13 * n_columns + (1 if n_columns == 4 else 0)
 
     def get_state(self):
         return tuple(tuple([self.game.roll_count]) + self.game.dices)
@@ -52,11 +46,10 @@ class QLearningAgent:
             potential_score = dice_combination_score_map[self.game.dices, action]
             return potential_score
 
-
     def choose_action(self):
         valid_actions = self.get_valid_actions()
         if not valid_actions:
-            print(agent.game)
+            print(self.game)
             print("No valid actions available, exiting....")
             exit()
         if np.random.rand() < self.exploration_rate:
@@ -104,7 +97,3 @@ class QLearningAgent:
                  f"Exploration decay: {self.exploration_decay}",
                  f"Exploration min: {self.exploration_min}"]
         return '\n'.join(lines)
-
-if __name__ == "__main__":
-    agent = QLearningAgent()
-    print(agent)

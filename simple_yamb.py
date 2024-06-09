@@ -1,15 +1,17 @@
 import random
 import numpy as np
+from dice_game import DiceGame
 from util import dice_combination_score_map
 from constants import DICE_ART, BOX_WIDTH, COLUMN_TYPES, ROW_HEADER_WIDTH, BORDERS, BOX_TYPES
 
-class Game:
-    def __init__(self, n_columns=4):
-        self.roll_count = 0
-        self.announcement = -1
-        self.dices = [1, 2, 3, 4, 5]
-        self.sheet = [[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1] for _ in range(n_columns)]
-        self.roll_dice(31)        
+class SimpleYamb(DiceGame):
+    def __init__(self):
+        super().__init__()  
+        self.sheet = [[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]]  
+
+    def reset(self):
+        super().reset()
+        self.sheet = [[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]]  
 
     def roll_dice(self, dice_to_roll):
         binary_str = f"{dice_to_roll:05b}"
@@ -28,31 +30,19 @@ class Game:
     def validate_fill_box(self, column, box):
         return self.roll_count > 0 and self.is_box_available(column, box)
 
-    def announce(self, box):
-        self.announcement = box
-
-    def validate_announcement(self, box):
-        return self.announcement == -1 and self.roll_count == 1 and len(self.sheet) == 4 and self.sheet[3][box] == -1
-
     def is_box_available(self, column, box):
-        if self.sheet[column][box] != -1:
-            return len(self.sheet) == 4
-        elif column == 0:
-            return box == 0 or self.sheet[column][box - 1] != -1
-        elif column == 1:
-            return box == 12 or self.sheet[column][box + 1] != -1
-        elif column == 3:
-            return box == self.announcement
-        return column == 2
+        if self.sheet[column][box] == -1:
+            if column == 0:
+                return box == 0 or self.sheet[column][box - 1] != -1
+            elif column == 1:
+                return box == 12 or self.sheet[column][box + 1] != -1
+            elif column == 3:
+                return box == self.announcement
+            return column == 2
+        return False
 
     def is_completed(self):
-        return self.roll_count == 3 if len(self.sheet) == 0 else all(all(box != -1 for box in column) for column in self.sheet)
-        
-    def is_announcement_required(self):
-        return self.roll_count == 1 and self.announcement == -1 and self.are_all_non_anouncement_columns_completed()       
-
-    def are_all_non_anouncement_columns_completed(self):
-        return len(self.sheet) == 4 and all(all(box != -1 for box in column) for column in self.sheet[:-1]) 
+        return all(all(box != -1 for box in column) for column in self.sheet) 
 
     def get_total_sum(self):
         return self.get_top_sum() + self.get_middle_difference() + self.get_bottom_sum()
@@ -74,19 +64,8 @@ class Game:
         return sum(self.get_bottom_sum_column(column) for column in self.sheet)
 
     def get_bottom_sum_column(self, column):
-        return sum(box if box != -1 else 0 for box in column[8:])
-
-    def get_potential_scores(self):
-        potential_scores = []
-        for column in range(len(self.sheet)):
-            for box in range(len(column)):
-                if self.is_box_available(column, box) or (column == 3 and self.is_announcement_required() and self.sheet[column][box] == -1):
-                    if box == 7:  # Min
-                        potential_scores.append(30-dice_combination_score_map[(self.dices, box)])
-                    else:
-                        potential_scores.append(dice_combination_score_map[(self.dices, box)])
-        return potential_scores
-    
+        return sum(box if box != -1 else 0 for box in column[8:])   
+        
     def __repr__(self):
         lines = ['  '.join(DICE_ART[dice][line] for dice in self.dices) for line in range(5)]
         if len(self.sheet) == 0:
@@ -134,5 +113,5 @@ def format_total_row(label, values):
     return f"│{label:^{ROW_HEADER_WIDTH + 2}}│" + "│".join(f"{value:^{BOX_WIDTH}}" for value in values) + f"│{total_sum:^{BOX_WIDTH}}│"
 
 if __name__ == "__main__":
-    game = Game()
+    game = SimpleYamb()
     print(game)
