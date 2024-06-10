@@ -39,9 +39,9 @@ class BaseQLearningAgent:
     def update_exploration_rate(self):
         if self.exploration_rate > self.exploration_min:
             self.exploration_rate *= self.exploration_decay
-
+    
     def save_q_table(self):
-        filename = "q_tables/" + self.name + ".json"
+        filename = "q_tables/" + self.name + ".json"        
         with open(filename, 'wb') as file:
             pickle.dump(dict(self.q_table), file)
 

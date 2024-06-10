@@ -1,9 +1,8 @@
 import time
 import numpy as np
-import tensorflow as tf
 from base_agent import BaseQLearningAgent
 from constants import BOX_TYPES
-from util import dice_combination_score_map, get_count_of_dice_values_score, get_recurring_values_score, get_consecutive_values_score
+from util import  get_count_of_dice_values_score, get_recurring_values_score, get_consecutive_values_score
 from util import dice_combination_map
 from dice_game import DiceGame
 
@@ -48,18 +47,14 @@ class DiceGameQLearningAgent(BaseQLearningAgent):
         reward_log = []
         exploration_rate_log = []
 
-        log_dir = f"logs/fit/{self.name}"
-        summary_writer = tf.summary.create_file_writer(log_dir)
-        print(f"TensorBoard logs will be written to {log_dir}")
-
         for episode in range(num_episodes+1):
             if episode == 0 or episode % batch_size == 0:
                 start_time = time.time()
             total_reward = 0
             state = self.get_state()
-            dices = self.game.dices
             reward = 0
             while not self.game.is_completed():
+                dices = self.game.dices
                 action = self.choose_action()
                 if action < 32: 
                     self.game.roll_dice(action)
@@ -87,9 +82,6 @@ class DiceGameQLearningAgent(BaseQLearningAgent):
             if episode % batch_size == batch_size - 1 or episode == num_episodes:
                 batch_time = time.time() - start_time
                 avg_total_score = np.mean(total_scores[-batch_size:])
-                with summary_writer.as_default():
-                    tf.summary.scalar(f"Average Total Score", avg_total_score, step=episode)
-                    tf.summary.scalar(f"Exploration Rate", self.exploration_rate, step=episode)
                 length = 50
                 filled_length = int(length * episode // num_episodes)
                 percent = ("{0:.1f}").format(100 * (episode / float(num_episodes)))
