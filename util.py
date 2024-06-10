@@ -62,6 +62,34 @@ def calculate_recurring_value_sum(dices, threshold):
         return recurring_values[0] * threshold
     return 0
 
+def get_count_of_dice_values_score(dices, box):
+    count = dices.count(box + 1)
+    score = count ** 2
+    if count >= 3:
+        score += 6
+    return score
+    
+def get_recurring_values_score(dices, box):
+    max_recurring = max(dices, key=dices.count)
+    score = sum([dice for dice in dices if dice == max_recurring]) if max_recurring > 1 else 0
+    if dice_combination_score_map[dices, box] > 0:
+        score = dice_combination_score_map[dices, box]
+    return score
+
+def get_consecutive_values_score(dices, box):
+    consecutive_count = 1
+    max_consecutive_count = 1
+    for i in range(1, len(dices)):
+        if dices[i] == dices[i-1] + 1:
+            consecutive_count += 1
+            max_consecutive_count = max(max_consecutive_count, consecutive_count)
+        else:
+            consecutive_count = 1
+        score = max_consecutive_count
+    if dice_combination_score_map[dices, box] > 0:
+        score = dice_combination_score_map[dices, box]
+    return score
+
 print("Calculating scores for all possible dice combinations and boxes...")
 
 dice_combinations = list(combinations_with_replacement(range(1, 7), 5))
