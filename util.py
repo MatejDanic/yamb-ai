@@ -90,7 +90,7 @@ def get_consecutive_values_score(dices, box):
         score = dice_combination_score_map[dices, box]
     return score
 
-print("Calculating scores for all possible dice combinations and boxes...")
+print("Calculating all possible dice combinations of dice and their category scores...")
 
 dice_combinations = list(combinations_with_replacement(range(1, 7), 5))
 dice_combination_map = {combination: i for i, combination in enumerate(dice_combinations)}
@@ -100,7 +100,4 @@ for combination in list(combinations_with_replacement(range(1, 7), 5)):
     for box in range(13):
         dice_combination_score_map[(combination, box)] = calculate_score(combination, box)
 
-if __name__ == "__main__":
-    print("Dice combination score map:")
-    for combination, score in dice_combination_score_map.items():
-        print(f"{combination} -> {score}")  
+print(f"{len(dice_combinations)} unique dice combinations found.")

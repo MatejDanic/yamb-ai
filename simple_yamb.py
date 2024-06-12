@@ -1,5 +1,4 @@
 import random
-import numpy as np
 from dice_game import DiceGame
 from util import dice_combination_score_map
 from constants import DICE_ART, BOX_WIDTH, COLUMN_TYPES, ROW_HEADER_WIDTH, BORDERS, BOX_TYPES

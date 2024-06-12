@@ -1,10 +1,8 @@
 import random
 from constants import DICE_ART
-from util import dice_combination_score_map
 
 class DiceGame:
-    def __init__(self, box=0):
-        self.box = box
+    def __init__(self):
         self.dices = [1, 2, 3, 4, 5]
         self.roll_count = 0
         self.roll_dice(31)
@@ -24,9 +22,6 @@ class DiceGame:
 
     def is_completed(self):
         return self.roll_count == 3
-    
-    def get_score(self):
-        return dice_combination_score_map[self.dices, self.box]
     
     def __repr__(self):
         lines = ['  '.join(DICE_ART[dice][line] for dice in self.dices) for line in range(5)]
