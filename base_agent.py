@@ -4,10 +4,9 @@ import pickle
 from collections import defaultdict
 
 class BaseQLearningAgent:
-    def __init__(self, name, action_size, state_size, learning_rate=0.01, discount_factor=0.99, exploration_rate=1.0, exploration_decay=0.99999, exploration_min=0.01):
+    def __init__(self, name, action_size, learning_rate=0.01, discount_factor=0.99, exploration_rate=1.0, exploration_decay=0.99999, exploration_min=0.01):
         self.name = f"{name}"
         self.action_size = action_size
-        self.state_size = state_size
         self.learning_rate = learning_rate
         self.discount_factor = discount_factor
         self.exploration_rate = exploration_rate
@@ -15,15 +14,15 @@ class BaseQLearningAgent:
         self.exploration_decay = exploration_decay
         self.q_table = defaultdict(lambda: np.zeros(self.action_size))
 
-    def choose_action(self, state):
-        valid_actions = self.get_valid_actions(state)
-        if not valid_actions:
-            print(state)
+    def choose_action(self, game):
+        valid_actions = self.get_valid_actions(game)
+        if len(valid_actions) == 0:
             print("No valid actions available, exiting....")
             exit()
         if np.random.rand() < self.exploration_rate:
             return np.random.choice(valid_actions)
         else:
+            state = self.get_state(game)
             q_values = self.q_table[state]
             q_values_valid = [q_values[action] for action in valid_actions]
             return valid_actions[np.argmax(q_values_valid)]
@@ -50,7 +49,6 @@ class BaseQLearningAgent:
     
     def __repr__(self):
         lines = [f"Action size: {self.action_size}",
-                f"State size: {self.state_size}",
                 f"Learning rate: {self.learning_rate}",
                 f"Discount facotr: {self.discount_factor}",
                 f"Exploration rate: {self.exploration_rate}",
@@ -61,11 +59,7 @@ class BaseQLearningAgent:
     @abstractmethod
     def get_state(self, game):
         pass
-
+    
     @abstractmethod
-    def calculate_reward(self, action):
-        pass
-
-    @abstractmethod
-    def get_valid_actions(self, state):
+    def get_valid_actions(self, game):
         pass

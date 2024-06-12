@@ -101,3 +101,15 @@ for combination in list(combinations_with_replacement(range(1, 7), 5)):
         dice_combination_score_map[(combination, box)] = calculate_score(combination, box)
 
 print(f"{len(dice_combinations)} unique dice combinations found.")
+
+def binary_array_to_int(arr):
+    padded_arr = [0] * (5 - len(arr)) + arr
+    return int(''.join(map(str, padded_arr)), 2)
+
+def int_to_binary_array(num):
+    binary_str = bin(num)[2:]
+    padded_binary_str = binary_str.zfill(5)
+    return list(map(int, padded_binary_str))
+
+
+

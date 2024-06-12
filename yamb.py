@@ -10,13 +10,25 @@ class Yamb(SimpleYamb):
                       [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]]  
         self.announcement = -1
 
-    def reset(self):
-        super().reset()
-        self.sheet = [[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-                      [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-                      [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-                      [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]]  
+    def fill_box(self, column, box):
+        super.fill_box(column, box)
         self.announcement = -1
+
+    def roll_dice(self, dice_to_roll):
+        super.roll_dice(dice_to_roll)
+        if (self.roll_count == 3):
+            self.fill_box(3, self.announcement)
+
+    def is_box_available(self, column, box):
+        if self.sheet[column][box] == -1:
+            if column == 0:
+                return box == 0 or self.sheet[column][box - 1] != -1
+            elif column == 1:
+                return box == 12 or self.sheet[column][box + 1] != -1
+            elif column == 3:
+                return box == self.announcement
+            return column == 2
+        return False
 
     def announce(self, box):
         self.announcement = box

@@ -7,17 +7,21 @@ from dice_game import DiceGame
 
 class DiceGameQLearningAgent(BaseQLearningAgent):
     def __init__(self, learning_rate=0.075, discount_factor=0.33, exploration_rate=1.0, exploration_decay=0.9999995, exploration_min=0.0001, box=0):
-        super().__init__(f"{box}_{BOX_TYPES[box]}", 32, 252 + (2 if box in [0, 1, 2, 3, 4, 5] else 0), learning_rate, discount_factor, exploration_rate, exploration_decay, exploration_min)
+        super().__init__(f"{box}_{BOX_TYPES[box]}", 32, learning_rate, discount_factor, exploration_rate, exploration_decay, exploration_min)
         self.box = box
 
-    def get_state(self, game):
+    def get_state(self, game: DiceGame):
         state = tuple([dice_combination_map[game.dices]])
-        if self.box in [0, 1, 2, 3, 4, 5]:
+        if self.box not in [6, 7, 8, 9, 10, 11, 12]:
             state += tuple([game.roll_count])
         return state
     
-    def get_valid_actions(self, state):
-        return [i for i in range(32)]
+    def get_valid_actions(self, game: DiceGame):
+        valid_actions = []
+        for i in range(32):
+            if game.validate_roll_dice():
+                valid_actions.append(i)
+        return valid_actions
 
     def calculate_reward(self, previous_dices, current_dices):
         previous_score = self.get_score(previous_dices)
@@ -42,40 +46,29 @@ class DiceGameQLearningAgent(BaseQLearningAgent):
         highest_score = 0
         batch_size = round(num_episodes / 100)
         total_scores = []
-        reward_log = []
         exploration_rate_log = []
 
         for episode in range(num_episodes+1):
             game = DiceGame()
             if episode == 0 or episode % batch_size == 0:
                 start_time = time.time()
-            total_reward = 0
             state = self.get_state(game)
-            reward = 0
             while not game.is_completed():
                 previous_dices = game.dices
-                action = self.choose_action(self.get_state(game))
-                if action < 32: 
-                    game.roll_dice(action)
-                elif action < 84:
-                    action -= 32
-                    game.fill_box(action // 13, action % 13)
-                else:
-                    game.announce(action - 84)
+                action = self.choose_action(game)
                 
+                game.roll_dice(action)
+
                 next_state = self.get_state(game)
                 reward = self.calculate_reward(previous_dices, game.dices)
                 self.learn(state, action, reward, next_state, game.is_completed())
                 state = next_state
-                total_reward += reward
 
             self.update_exploration_rate()
             current_score = dice_combination_score_map[game.dices, self.box]
             
             highest_score = max(highest_score, current_score)
             total_scores.append(current_score)
-
-            reward_log.append(total_reward)
             exploration_rate_log.append(self.exploration_rate)
 
             if episode % batch_size == batch_size - 1 or episode == num_episodes:
